@@ -7,8 +7,10 @@
 
 import UIKit
 import SnapKit
+import CoreLocation
 
 class WeatherViewController: UIViewController {
+    // MARK: - UI
     
     private lazy var backgroundImageView: UIImageView = {
         let imageView = UIImageView()
@@ -35,6 +37,8 @@ class WeatherViewController: UIViewController {
         
         stackView.axis = .horizontal
         stackView.alignment = .fill
+        stackView.spacing = 10
+        stackView.distribution = .fill
         stackView.translatesAutoresizingMaskIntoConstraints = false
         
         return stackView
@@ -43,8 +47,9 @@ class WeatherViewController: UIViewController {
     private lazy var geoButton: UIButton = {
         let button = UIButton(type: .system)
         
-        button.setImage(UIImage(systemName: Constants.geoSF), for: .normal)
+        button.setBackgroundImage(UIImage(systemName: Constants.geoSF), for: .normal)
         button.tintColor = .label
+        button.addTarget(self, action: #selector(locationPressed), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         
         return button
@@ -68,8 +73,9 @@ class WeatherViewController: UIViewController {
     private lazy var searchButton: UIButton = {
         let button = UIButton(type: .system)
         
-        button.setImage(UIImage(systemName: Constants.searchSF), for: .normal)
+        button.setBackgroundImage(UIImage(systemName: Constants.searchSF), for: .normal)
         button.tintColor = .label
+        button.addTarget(self, action: #selector(searchPressed), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         
         return button
@@ -127,13 +133,47 @@ class WeatherViewController: UIViewController {
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
+    
+    // MARK: - Private Properties
+    private var weatherManager = WeatherManager()
+    private var locationManager = CLLocationManager()
+    
+    // MARK: - Life Cycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         
         setupUI()
         setupConstraints()
+        setDelegates()
+        setupConstraints()
+        setupLocationSettings()
     }
+    
+    // MARK: - Private Methods
+    
+    private func setDelegates() {
+        searchTextField.delegate = self
+        weatherManager.delegate = self
+        locationManager.delegate = self
+    }
+    
+    private func setupLocationSettings() {
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestLocation()
+    }
+    
+    // MARK: - Actions
+    
+    @objc func searchPressed(_ sender: UIButton) {
+        searchTextField.endEditing(true)
+    }
+    
+    @objc func locationPressed(_ sender: UIButton) {
+        locationManager.requestLocation()
+    }
+    
+    // MARK: - Setup Views
     
     private func setupUI() {
         view.addSubview(backgroundImageView)
@@ -153,14 +193,12 @@ class WeatherViewController: UIViewController {
         
         mainStackView.addArrangedSubview(cityLabel)
         mainStackView.addArrangedSubview(emptyView)
-        
-        tempLabel.text = "21"
-        tempTypeLabel.text = Constants.celsius
-        cityLabel.text = "London"
     }
 }
 
 extension WeatherViewController {
+    
+    // MARK: - Setup Constraints
     
     private func setupConstraints() {
         setupBackgroundImageViewConstraints()
@@ -233,5 +271,74 @@ extension WeatherViewController {
             conditionalImageView.widthAnchor.constraint(equalToConstant: 120.0),
             conditionalImageView.heightAnchor.constraint(equalToConstant: 120.0),
         ])*/
+    }
+}
+
+// MARK: - CLLocationManagerDelegate
+
+extension WeatherViewController: CLLocationManagerDelegate {
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let location = locations.last {
+            locationManager.stopUpdatingLocation()
+            
+            let lat = location.coordinate.latitude
+            let lon = location.coordinate.longitude
+            
+            weatherManager.fetchWeather(latitude: lat, longitude: lon)
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print(error)
+    }
+    
+    @IBAction func locationButtonPressed(_ sender: UIButton) {
+        locationManager.requestLocation()
+    }
+}
+
+// MARK: - UITextFieldDelegate
+
+extension WeatherViewController: UITextFieldDelegate {
+    
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool { // if pressed return key on the keyboard
+        searchTextField.endEditing(true)
+        searchTextField.text = ""
+        return true
+    }
+    
+    func textFieldShouldEndEditing(_ textField: UITextField) -> Bool {
+        if textField.text ?? "" != "" {
+            return true
+        } else {
+            textField.placeholder = "Type something"
+            return false
+        }
+    }
+    
+    func textFieldDidEndEditing(_ textField: UITextField) { // if the pressed search button after editing text
+        
+        if let city = searchTextField.text {
+            weatherManager.fetchWeather(cityName: city)
+        }
+        searchTextField.text = ""
+    }
+}
+
+// MARK: - WeatherManagerDelegate
+
+extension WeatherViewController: WeatherManagerDelegate {
+    func didUpdateWeather(_ weather: WeatherModel) {
+        DispatchQueue.main.async {
+            self.conditionalImageView.image = UIImage(systemName: weather.conditionName)
+            self.tempLabel.text = weather.temperatureString
+            self.tempTypeLabel.text = Constants.celsius
+            self.cityLabel.text = weather.cityName
+        }
+    }
+    
+    func didFailWithError(error: Error) {
+        print(error)
     }
 }
