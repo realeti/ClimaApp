@@ -304,12 +304,11 @@ extension WeatherViewController: UITextFieldDelegate {
     
     func textFieldShouldReturn(_ textField: UITextField) -> Bool { // if pressed return key on the keyboard
         searchTextField.endEditing(true)
-        searchTextField.text = ""
         return true
     }
     
     func textFieldShouldEndEditing(_ textField: UITextField) -> Bool {
-        if textField.text ?? "" != "" {
+        if !(textField.text?.isEmpty ?? false) {
             return true
         } else {
             textField.placeholder = "Type something"
@@ -322,6 +321,7 @@ extension WeatherViewController: UITextFieldDelegate {
         if let city = searchTextField.text {
             weatherManager.fetchWeather(cityName: city)
         }
+        
         searchTextField.text = ""
     }
 }
